@@ -88,6 +88,8 @@ class OpendataClient(object):
             - uid: decision type identifier
             - label: decision type title
             - parent: identifier of parent type, if any
+            - allowedInDecisions: true if the decision type
+              can be used to publish decisions
         """
         return self._get_resource('/types')
     
@@ -102,6 +104,8 @@ class OpendataClient(object):
           - uid: decision type identifier
           - label: decision type title
           - parent: identifier of parent type, if any
+          - allowedInDecisions: true if the decision type
+            can be used to publish decisions
         """
         return self._get_resource('/types/{0}/'.format(type_id))
     
