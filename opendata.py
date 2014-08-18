@@ -120,6 +120,8 @@ class OpendataClient(object):
           - uid: decision type identifier
           - label: decision type title
           - parent: identifier of parent type, if any
+          - allowedInDecisions: true if the decision type
+            can be used to publish decisions
           - extraFields: list of dicts with the following contents:
             - uid: identifier of extra field
             - label: title of extra field
@@ -250,6 +252,13 @@ class OpendataClient(object):
         """
         return self._get_resource('/decisions/v/{0}/'.format(version_id))
     
+    def get_decision_version_log(self, ada):
+        """Returns the version log of the decision with the specified ada.
+        
+        Arguments:
+        ada: decision identifier
+        """
+        return self._get_resource('/decisions/{0}/versionlog'.format(ada))
     
     def get_advanced_search_results(self, q, page=0, size=10):
         """Performs search with the given criteria and returns the results.
@@ -263,7 +272,7 @@ class OpendataClient(object):
               by the Diavgeia administators.
         """
         return self._get_resource(
-            '/search/advanced/q={0}&page={1}&size={2}'.format(q, page, size))
+            '/search/advanced?q={0}&page={1}&size={2}'.format(q, page, size))
     
     
     def get_simple_search_results(self, **kwargs):
@@ -320,7 +329,7 @@ class OpendataClient(object):
         """
         return self._get_resource('/types/{0}/terms'.format(type_id))
     
-    def submit_decision(self, metadata, pdf, attachments=[]):
+    def submit_decision(self, metadata, pdf, attachments=[], recipients=[]):
         """Submits a new decision in Diavgeia.
         
         Arguments:
@@ -335,13 +344,18 @@ class OpendataClient(object):
         of the decision, if any; tuple consisting of the following values
          - file handler
          - description
+         
+        recipients: list of email addresses where a notification will be
+        sent when the decision is published
         """
+        
+        self._add_recipients(metadata, recipients)
         
         metadata_str = json.dumps(metadata)
         data = {'metadata': metadata_str}
         files = [('decisionFile', pdf)]
         
-        if len(attachments) > 0:
+        if attachments:
             # Stringify attachment description list
             data['attachmentDescr'] = json.dumps([att[1] for att in attachments])
             for att in attachments:
@@ -385,8 +399,36 @@ class OpendataClient(object):
         
         return response
     
+    def submit_revocation_request(self, ada, comment):
+        """Sends a request for the revocation of the decision with the
+        specified ADA, using the specified comment for the reasoning of
+        the revocation. If this operation succeeds, then the status of 
+        the decision will be 'PENDING_REVOCATION'.
+        
+        Arguments:
+        ada: decision identifier
+        comment: reason for revocation of the decision
+        """
+        request_str = json.dumps({'ada': ada, 'comment': comment})
+        headers = self.default_headers.copy()
+        headers['Content-type'] = 'application/json'
+        response = requests.post(
+            url=self._get_resource_url("/decisions/requests/revocations"), 
+            data=request_str, headers=headers, verify=False, 
+            auth=self._create_auth())
+        return response
+    
     
     ## PRIVATE
+    
+    def _add_recipients(self, metadata, recipients):
+        if recipients and metadata['publish']:
+            metadata['actions'] = [
+                {
+                    'name': 'notifyRecipients',
+                    'args': recipients
+                }
+            ]
     
     def _get_resource(self, resource, addheaders={}):
         headers = self.default_headers.copy()
