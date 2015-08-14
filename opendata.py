@@ -366,7 +366,8 @@ class OpendataClient(object):
               auth=self._create_auth())
     
     
-    def edit_published_decision(self, ada, metadata, pdf=None):
+    def edit_published_decision(self, ada, metadata, pdf=None, 
+                                attachments=[], attachments_to_remove=[]):
         """Updates a Diavgeia decision.
         
         Arguments:
@@ -378,11 +379,22 @@ class OpendataClient(object):
         pdf: file handler for the decision document, if this is an
         attempt for a corrected copy. Note that if this is the case,
         metadata['correctedCopy'] MUST be set to True
+        
+        attachments: file handlers and descriptions for the attachments
+        of the decision, if any; tuple consisting of the following values
+         - file handler
+         - description
+        
+        attachments_to_remove: list of IDs of the attachments that
+        need to be removed
         """
+        
+        if attachments_to_remove and not pdf and not attachments:
+            metadata['attachments'] = {'remove': attachments_to_remove}
         
         metadata_str = json.dumps(metadata)
         response = None
-        if pdf is None:
+        if not pdf and not attachments:
             headers = self.default_headers.copy()
             headers['Content-type'] = 'application/json'
             response = requests.post(
@@ -391,7 +403,21 @@ class OpendataClient(object):
                 auth=self._create_auth())
         else:
             data = {'metadata': metadata_str}
-            files = (('decisionFile', pdf), )
+            files = []
+            
+            if pdf:
+                files.append(('decisionFile', pdf))
+            
+            if attachments:
+                # Stringify attachment description list
+                data['attachmentDescr'] = json.dumps([att[1] for att in attachments])
+                for att in attachments:
+                    files.append(('attachments', att[0]))
+            
+            # Stringify attachment ID list
+            if attachments_to_remove:
+                data['attachmentsToRemove'] = json.dumps(attachments_to_remove)
+            
             response = requests.post(
                 url=self._get_resource_url("/decisions/" + ada), 
                 data=data, files=files, verify=False,
